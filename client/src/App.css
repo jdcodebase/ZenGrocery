@@ -1,0 +1,23 @@
+.hero-btn {
+  @apply text-white px-6 py-4 text-lg font-semibold rounded-xl 
+         w-full max-w-xs text-center shadow-sm 
+         transition-all duration-150 
+         active:scale-95;
+}
+
+/* Feature colors */
+.hero-btn.weigh {
+  @apply bg-green-600 hover:bg-green-700;
+}
+
+.hero-btn.pack {
+  @apply bg-purple-600 hover:bg-purple-700;
+}
+
+.hero-btn.price {
+  @apply bg-blue-600 hover:bg-blue-700;
+}
+
+.hero-btn.billing {
+  @apply bg-orange-600 hover:bg-orange-700;
+}
