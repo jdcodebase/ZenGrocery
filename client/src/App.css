@@ -10,7 +10,7 @@
   @apply bg-green-600 hover:bg-green-700;
 }
 
-.hero-btn.pack {
+.hero-btn.unit {
   @apply bg-purple-600 hover:bg-purple-700;
 }
 
@@ -20,4 +20,8 @@
 
 .hero-btn.billing {
   @apply bg-orange-600 hover:bg-orange-700;
+}
+
+.hero-btn.inventory {
+  @apply bg-teal-600 hover:bg-teal-700;
 }

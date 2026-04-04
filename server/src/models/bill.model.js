@@ -11,16 +11,17 @@ const billSchema = new mongoose.Schema(
         },
         itemName: String,
 
-        quantitySold: Number, // kg or units
+        quantitySold: Number,
 
-        totalPrice: Number, // ✅ renamed
+        totalPrice: Number,
         profit: Number,
 
         unit: String,
 
-        // ✅ snapshots (VERY IMPORTANT)
+        // snapshots
         sellingPrice: Number,
         costPerKg: Number,
+        costPrice: Number,
       },
     ],
 
@@ -28,14 +29,10 @@ const billSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+
     totalProfit: {
       type: Number,
       required: true,
-    },
-
-    createdAt: {
-      type: Date,
-      default: Date.now,
     },
   },
   { timestamps: true },

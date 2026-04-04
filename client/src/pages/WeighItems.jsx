@@ -1,11 +1,5 @@
-import { useState, useEffect } from "react";
-import {
-  calculateCostPerKg,
-  calculateSellingPrice,
-  calculateMargin,
-} from "../utils/itemUtils";
-import { addWeighItemAPI } from "../services/itemService";
-import { getItemsAPI } from "../services/itemService";
+import { useState, useEffect, useRef } from "react";
+import { addWeighItemAPI, getItemsAPI } from "../services/itemService";
 
 const margins = [2.5, 5, 8, 10];
 
@@ -14,22 +8,39 @@ const initialState = {
   buyingPrice: "",
   sellingPrice: "",
   quantity: "",
+  lowStockThreshold: "", // ✅ NEW
 };
 
 const parseQuantity = (value) => {
-  if (!value) return 0;
+  if (!value) return NaN;
 
   value = value.toLowerCase().trim();
 
-  if (value.includes("kg")) {
-    return parseFloat(value);
+  value = value.replace(/\s/g, "");
+
+  if (value.endsWith("kg")) {
+    return parseFloat(value.replace("kg", ""));
   }
 
-  if (value.includes("g")) {
-    return parseFloat(value) / 1000;
+  if (value.endsWith("g")) {
+    return parseFloat(value.replace("g", "")) / 1000;
   }
 
   return parseFloat(value);
+};
+
+const calculateCostPerKg = (buyingPrice, quantity) => {
+  if (!buyingPrice || !quantity) return 0;
+  return Math.ceil(buyingPrice / quantity);
+};
+
+const calculateMargin = (costPrice, sellingPrice) => {
+  if (!costPrice || !sellingPrice) return 0;
+  return (((sellingPrice - costPrice) / costPrice) * 100).toFixed(1);
+};
+
+const calculateSellingPrice = (costPrice, percent) => {
+  return Math.ceil(costPrice + (costPrice * percent) / 100);
 };
 
 const WeighItems = () => {
@@ -38,57 +49,91 @@ const WeighItems = () => {
   const [margin, setMargin] = useState(null);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
-  const [filtered, setFiltered] = useState([]);
+  const [search, setSearch] = useState("");
+
+  const dropdownRef = useRef(null);
 
   useEffect(() => {
-    const fetchItems = async () => {
-      const res = await getItemsAPI();
-      setItems(res.data);
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setItems([]);
+      }
     };
 
-    fetchItems();
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    const delay = setTimeout(() => {
+      const fetchItems = async () => {
+        try {
+          const res = await getItemsAPI({ type: "weighItem", search });
+          setItems(res.data);
+        } catch (err) {
+          console.error(err);
+        }
+      };
+
+      if (search.length >= 2) {
+        fetchItems();
+      } else {
+        setItems([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(delay);
+  }, [search]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
 
     if (name === "itemName") {
-      const search = value.toLowerCase();
-
-      const result = items.filter((item) =>
-        item.displayName.toLowerCase().includes(search),
-      );
-
-      setFiltered(result);
+      setSearch(value);
     }
 
     const updated = { ...formData, [name]: value };
     setFormData(updated);
 
-    // calculate cost per kg
-
     const parsedQty = parseQuantity(updated.quantity);
 
     if (!parsedQty || isNaN(parsedQty)) {
       setCostPerKg(0);
-      return; // 🚨 STOP further calculations
+      setMargin(null);
+      return;
     }
 
-    const cost = calculateCostPerKg(updated.buyingPrice, parsedQty);
+    const cost = calculateCostPerKg(Number(updated.buyingPrice), parsedQty);
     setCostPerKg(cost);
 
-    if (name === "sellingPrice") {
-      if (!value || !cost || isNaN(cost)) {
-        setMargin(null);
-      } else {
-        setMargin(calculateMargin(cost, value));
-      }
+    if (updated.sellingPrice && cost) {
+      setMargin(calculateMargin(cost, updated.sellingPrice));
     }
 
     if (name === "quantity") {
-      updated.sellingPrice = "";
-      setMargin(null);
+      if (Math.abs(cost - costPerKg) > 0.01) {
+        setFormData((prev) => ({
+          ...prev,
+          sellingPrice: "",
+        }));
+        setMargin(null);
+      }
     }
+  };
+
+  const handleSelectItem = (item) => {
+    setFormData({
+      itemName: item.displayName,
+      buyingPrice: "",
+      quantity: item.stock,
+      sellingPrice: item.sellingPrice,
+      lowStockThreshold: item.lowStockThreshold || "", // ✅ NEW
+    });
+
+    setSearch(item.displayName); // ✅ FIX
+    setCostPerKg(item.costPerKg);
+    setMargin(null);
+    setItems([]); // close dropdown
   };
 
   const handleSelectPrice = (percent) => {
@@ -99,20 +144,8 @@ const WeighItems = () => {
       sellingPrice: selling,
     }));
 
-    setMargin(percent);
-  };
-
-  const handleSelectItem = (item) => {
-    setFormData({
-      itemName: item.displayName,
-      buyingPrice: "",
-      quantity: "",
-      sellingPrice: item.sellingPrice,
-    });
-
-    setCostPerKg(item.costPerKg);
-    setMargin(null);
-    setFiltered([]);
+    // ✅ calculate real margin
+    setMargin(calculateMargin(costPerKg, selling));
   };
 
   const resetForm = () => {
@@ -124,6 +157,11 @@ const WeighItems = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!formData.itemName.trim()) {
+      alert("Item name required");
+      return;
+    }
+
     if (!formData.sellingPrice) {
       alert("Select or enter selling price");
       return;
@@ -134,14 +172,29 @@ const WeighItems = () => {
 
       const parsedQty = parseQuantity(formData.quantity);
 
+      let parsedThreshold = 0;
+
+      if (formData.lowStockThreshold) {
+        parsedThreshold = parseQuantity(formData.lowStockThreshold);
+
+        if (isNaN(parsedThreshold)) {
+          alert("Invalid threshold value");
+          return;
+        }
+
+        if (parsedThreshold >= parsedQty) {
+          alert("Threshold must be smaller than total quantity");
+          return;
+        }
+      }
+
       const payload = {
         itemName: formData.itemName,
         buyingPrice: Number(formData.buyingPrice),
-        quantity: parsedQty, // ✅ always in KG
+        quantity: parsedQty,
         sellingPrice: Number(formData.sellingPrice),
-        margin: Number(margin),
+        lowStockThreshold: parsedThreshold,
       };
-
       const res = await addWeighItemAPI(payload);
 
       alert("Item added successfully");
@@ -149,7 +202,7 @@ const WeighItems = () => {
       resetForm();
     } catch (err) {
       console.error(err);
-      alert("Error adding item ❌");
+      alert("Error adding item");
     } finally {
       setLoading(false);
     }
@@ -172,17 +225,22 @@ const WeighItems = () => {
         required
       />
 
-      {filtered.length > 0 && (
-        <div className="border rounded max-h-40 overflow-y-auto">
-          {filtered.map((item) => (
+      {items.length > 0 && (
+        <div
+          ref={dropdownRef}
+          className="border rounded max-h-40 overflow-y-auto"
+        >
+          {items.map((item) => (
             <p
-              key={item._id}
+              key={`${item.itemId}-${item.sellingPrice}`}
               onClick={() => handleSelectItem(item)}
               className="p-2 hover:bg-gray-100 cursor-pointer flex justify-between"
             >
-              <span>{item.displayName}</span>
+              <span>{item.label}</span>
               <span className="text-sm text-gray-500">
-                ₹{item.sellingPrice}/kg | {item.stock}kg
+                {item.type === "weighItem"
+                  ? `₹${item.sellingPrice}/kg | ${item.stock}kg`
+                  : `₹${item.sellingPrice} | ${item.quantity} pcs`}
               </span>
             </p>
           ))}
@@ -209,12 +267,6 @@ const WeighItems = () => {
         required
       />
 
-      {formData.quantity && (
-        <p className="text-xs text-gray-500">
-          Parsed: {parseQuantity(formData.quantity)} kg
-        </p>
-      )}
-
       {costPerKg > 0 && (
         <p className="text-sm text-gray-600">Cost per KG: ₹{costPerKg}</p>
       )}
@@ -230,7 +282,7 @@ const WeighItems = () => {
                 type="button"
                 onClick={() => handleSelectPrice(m)}
                 className={`btn ${
-                  margin === m
+                  Math.round(margin) === m
                     ? "bg-black text-white"
                     : "hover:bg-black hover:text-white"
                 }`}
@@ -252,8 +304,23 @@ const WeighItems = () => {
         required
       />
 
-      {margin && (
+      {margin !== null && (
         <p className="text-sm text-green-600">Your Margin: {margin}%</p>
+      )}
+
+      <input
+        type="text"
+        name="lowStockThreshold"
+        placeholder="Low Stock Alert (e.g. 5kg or 300g)"
+        value={formData.lowStockThreshold}
+        onChange={handleChange}
+        className="input"
+      />
+
+      {formData.lowStockThreshold && (
+        <p className="text-xs text-gray-500">
+          Parsed: {parseQuantity(formData.lowStockThreshold)} kg
+        </p>
       )}
 
       <button

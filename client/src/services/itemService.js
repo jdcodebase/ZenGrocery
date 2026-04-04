@@ -9,14 +9,35 @@ export const addWeighItemAPI = (data) => {
   return API.post("/items/weigh", data);
 };
 
-export const getItemsAPI = () => {
-  return API.get("/items");
+export const addUnitItemAPI = (data) => {
+  return API.post("/items/unit", data);
+};
+
+export const getItemsAPI = (params) => {
+  return API.get("/items", {
+    params,
+    headers: {
+      "Cache-Control": "no-cache",
+    },
+  });
 };
 
 export const calculatePriceAPI = (data) => {
   return API.post("/items/estimate", data);
 };
 
-export const generateBillAPI = (items) => {
-  return API.post(`/items/sell`, { items });
+export const generateBillAPI = (payload) => {
+  return API.post(`/items/sell`, payload);
+};
+
+export const fetchItemsAPI = async () => {
+  return API.get("/items/table");
+};
+
+export const fetchStatsAPI = async () => {
+  return API.get("/items/analytics/today");
+};
+
+export const getLowStockAPI = async () => {
+  return API.get("/items/low-stock");
 };
