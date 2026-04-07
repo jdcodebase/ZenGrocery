@@ -1,10 +1,16 @@
 import express from "express";
 import cors from "cors";
-import itemRoutes from "./routes/item.routes.js";
+import routes from "./routes/index.js";
 
 const app = express();
 
-// Middleware
+/**
+ * ==============================
+ * ✅ CORE MIDDLEWARES
+ * ==============================
+ */
+
+// CORS
 app.use(
   cors({
     origin: process.env.CLIENT_URL || "http://localhost:5173",
@@ -12,18 +18,32 @@ app.use(
   }),
 );
 
+// Body parser
 app.use(express.json());
 
-// Simple logger
+/**
+ * ==============================
+ * ✅ LOGGER (basic)
+ * ==============================
+ * (Later we can move this to middleware/logger.js)
+ */
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
+  console.log(`${req.method} ${req.originalUrl}`);
   next();
 });
 
-// Routes
-app.use("/api/v1/items", itemRoutes);
+/**
+ * ==============================
+ * ✅ ROUTES
+ * ==============================
+ */
+app.use("/api/v1", routes);
 
-// Health check
+/**
+ * ==============================
+ * ✅ HEALTH CHECK
+ * ==============================
+ */
 app.get("/", (req, res) => {
   res.status(200).json({
     status: "OK",
@@ -31,18 +51,28 @@ app.get("/", (req, res) => {
   });
 });
 
-// 404 handler
+/**
+ * ==============================
+ * ❌ 404 HANDLER
+ * ==============================
+ */
 app.use((req, res) => {
   res.status(404).json({
+    success: false,
     message: "Route not found",
   });
 });
 
-// Global error handler
+/**
+ * ==============================
+ * ❌ GLOBAL ERROR HANDLER
+ * ==============================
+ */
 app.use((err, req, res, next) => {
-  console.error(err);
+  console.error("🔥 Error:", err);
 
   res.status(err.status || 500).json({
+    success: false,
     message: err.message || "Internal Server Error",
   });
 });

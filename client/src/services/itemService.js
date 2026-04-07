@@ -23,11 +23,11 @@ export const getItemsAPI = (params) => {
 };
 
 export const calculatePriceAPI = (data) => {
-  return API.post("/items/estimate", data);
+  return API.post("/bills/estimate", data);
 };
 
 export const generateBillAPI = (payload) => {
-  return API.post(`/items/sell`, payload);
+  return API.post(`/bills/sell`, payload);
 };
 
 export const fetchItemsAPI = async () => {
@@ -35,7 +35,7 @@ export const fetchItemsAPI = async () => {
 };
 
 export const fetchStatsAPI = async () => {
-  return API.get("/items/analytics/today");
+  return API.get("/bills/analytics/today");
 };
 
 export const getLowStockAPI = async () => {
